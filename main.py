@@ -5,7 +5,7 @@ import os
 from flask import Flask, request
 from threading import Thread
 
-TOKEN = "BURAYA_TOKEN_YAZ"
+TOKEN = "8330248406:AAGkRbWFts1Ly_Ho0BoI4Zxilc-q5qh_KPw"
 TELEGRAM = f"https://api.telegram.org/bot{TOKEN}"
 
 app = Flask(__name__)
