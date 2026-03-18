@@ -4,7 +4,7 @@ import os
 import threading
 from flask import Flask, request
 
-TOKEN = "8330248406:AAGkRbWFts1Ly_Ho0BoI4Zxilc-q5qh_KPw "
+TOKEN = "8330248406:AAGkRbWFts1Ly_Ho0BoI4Zxilc-q5qh_KPw"
 TELEGRAM = f"https://api.telegram.org/bot{TOKEN}"
 
 APP_URL = "https://crypto-bot-1-hs1x.onrender.com"  # önemli!
