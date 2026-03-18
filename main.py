@@ -4,18 +4,21 @@ import os
 import threading
 from flask import Flask, request
 
-TOKEN = "8330248406:AAGkRbWFts1Ly_Ho0BoI4Zxilc-q5qh_KPw"
+TOKEN = "8330248406:AAGkRbWFts1Ly_Ho0BoI4Zxilc-q5qh_KPw "
 TELEGRAM = f"https://api.telegram.org/bot{TOKEN}"
+
+APP_URL = "https://crypto-bot-1-hs1x.onrender.com"  # önemli!
 
 app = Flask(__name__)
 
 subscribers = set()
+sent_signals = set()
 last_call = 0
 
 MIDAS_COINS = [
-"btc","eth","sol","near","rndr","inj","arb",
-"sei","tia","apt","sui","op",
-"matic","avax","link","ton","kas","rave"
+"BTC","ETH","SOL","NEAR","RNDR","INJ","ARB",
+"SEI","TIA","APT","SUI","OP",
+"MATIC","AVAX","LINK","TON","KAS","RAVE"
 ]
 
 BINANCE_COINS = []
@@ -25,10 +28,12 @@ BINANCE_COINS = []
 def safe(url, params=None):
     global last_call
     try:
-        if time.time() - last_call < 0.7:
-            time.sleep(0.7)
-        last_call = time.time()
+        if time.time() - last_call < 0.6:
+            time.sleep(0.6)
+
         r = requests.get(url, params=params, timeout=10)
+        last_call = time.time()
+
         if r.status_code == 200:
             return r.json()
     except:
@@ -39,20 +44,34 @@ def safe(url, params=None):
 # TELEGRAM
 def send(chat, text):
     try:
-        requests.post(f"{TELEGRAM}/sendMessage",
-        json={"chat_id": chat, "text": text}, timeout=10)
+        requests.post(
+            f"{TELEGRAM}/sendMessage",
+            json={"chat_id": chat, "text": text},
+            timeout=10
+        )
     except:
         pass
+
+
+# KEEP ALIVE (SLEEP FIX)
+def keep_alive():
+    while True:
+        try:
+            requests.get(APP_URL)
+        except:
+            pass
+        time.sleep(300)
 
 
 # LOAD BINANCE
 def load_binance():
     global BINANCE_COINS
+
     data = safe("https://api.binance.com/api/v3/exchangeInfo")
 
     if data:
         BINANCE_COINS = list(set([
-            s["baseAsset"].lower()
+            s["baseAsset"]
             for s in data["symbols"]
             if s["quoteAsset"] == "USDT"
         ]))
@@ -66,14 +85,17 @@ load_binance()
 # PRICE DATA
 def get_prices(symbol):
     try:
+        symbol = symbol.upper() + "USDT"
+
         data = safe(
             "https://api.binance.com/api/v3/klines",
             {
-                "symbol": symbol.upper()+"USDT",
+                "symbol": symbol,
                 "interval": "1m",
-                "limit": 100
+                "limit": 120
             }
         )
+
         if not data:
             return None
 
@@ -88,9 +110,11 @@ def get_prices(symbol):
 # RSI
 def rsi(p):
     gains, losses = [], []
+
     for i in range(1,len(p)):
         diff = p[i]-p[i-1]
-        if diff>0:
+
+        if diff > 0:
             gains.append(diff)
         else:
             losses.append(abs(diff))
@@ -99,31 +123,27 @@ def rsi(p):
     avg_loss = sum(losses[-14:])/14 if losses else 1
 
     rs = avg_gain/avg_loss
+
     return 100-(100/(1+rs))
-
-
-# EMA
-def ema(p,n):
-    return sum(p[-n:])/n if len(p)>=n else 0
 
 
 # MACD
 def macd(p):
-    return ema(p,12)-ema(p,26)
+    return (sum(p[-12:])/12) - (sum(p[-26:])/26)
 
 
-# CORE ANALYSIS
+# ANALYZE
 def analyze(symbol):
 
     data = get_prices(symbol)
 
     if not data:
-        return None
+        return "⚠️ Coin bulunamadı"
 
     prices, volumes = data
 
     if len(prices) < 50:
-        return None
+        return "⚠️ Veri yetersiz"
 
     price = prices[-1]
     r = rsi(prices)
@@ -132,132 +152,92 @@ def analyze(symbol):
     score = 0
     reasons = []
 
-    # RSI
     if r < 30:
         score += 25
-        reasons.append("Dip (RSI düşük)")
+        reasons.append("RSI dip")
 
-    # MACD
     if m > 0:
         score += 15
-        reasons.append("Trend yukarı")
+        reasons.append("Trend up")
 
-    # MOMENTUM
     if prices[-1] > prices[-5]*1.02:
         score += 20
-        reasons.append("Momentum artıyor")
+        reasons.append("Momentum")
 
-    # BREAKOUT
     if price > max(prices[-20:]):
         score += 20
-        reasons.append("Direnç kırıldı")
+        reasons.append("Breakout")
 
-    # WHALE
     avg_vol = sum(volumes[:-1])/len(volumes[:-1])
+
     if volumes[-1] > avg_vol*2:
         score += 20
-        reasons.append("Whale girişi")
+        reasons.append("Whale")
 
-    # FAKE PUMP FILTER
     if prices[-1] > prices[-2]*1.05 and volumes[-1] < avg_vol:
         score -= 25
-        reasons.append("Fake pump şüphesi")
+        reasons.append("Fake pump")
 
-    # MIDAS BOOST
-    if symbol in MIDAS_COINS:
+    if symbol.upper() in MIDAS_COINS:
         score += 10
 
-    # SIGNAL
-    if score >= 75:
-        signal = "AL 🚀"
-    elif score >= 55:
-        signal = "İZLE 👀"
-    else:
-        signal = "RİSKLİ ⚠️"
+    return f"""
+🚨 ANALİZ
 
-    return {
-        "symbol": symbol,
-        "price": round(price,4),
-        "rsi": round(r,2),
-        "score": score,
-        "signal": signal,
-        "reasons": reasons
-    }
+🪙 {symbol.upper()}
+⭐ {score}/100
+💰 {round(price,4)}
+📊 RSI {round(r,2)}
+
+🔎 {" | ".join(reasons)}
+"""
 
 
-# SCAN SYSTEM
+# SCAN
 def scan():
 
     coins = MIDAS_COINS + BINANCE_COINS[:80]
 
     results = []
 
-    for coin in coins:
-        d = analyze(coin)
+    for c in coins:
 
-        if d and d["score"] >= 60:
-            results.append(d)
+        r = analyze(c)
 
-    results = sorted(results, key=lambda x: x["score"], reverse=True)
+        if "⭐" in str(r):
+            score = int(r.split("⭐")[1].split("/")[0])
 
-    return results
+            if score >= 60:
+                results.append((c, r, score))
+
+    return sorted(results, key=lambda x: x[2], reverse=True)[:5]
 
 
-# AUTO SYSTEM
+# AUTO ALERT
 def auto():
-
-    sent = set()
 
     while True:
         try:
+
             results = scan()
 
-            for r in results[:3]:
+            for coin, msg, score in results:
 
-                key = r["symbol"]
+                if len(sent_signals) > 50:
+                    sent_signals.clear()
 
-                if key in sent:
+                if coin in sent_signals:
                     continue
 
-                sent.add(key)
-
-                text = f"""
-🚨 FIRSAT COIN
-
-🪙 {r['symbol'].upper()}
-⭐ SCORE: {r['score']}/100
-💰 {r['price']}
-📊 RSI {r['rsi']}
-
-📢 {r['signal']}
-
-🔎 {" | ".join(r['reasons'])}
-"""
+                sent_signals.add(coin)
 
                 for u in subscribers:
-                    send(u, text)
+                    send(u, "🚨 FIRSAT\n" + msg)
 
         except:
             pass
 
         time.sleep(120)
-
-
-# MARKET
-def market():
-    data = safe("https://api.coingecko.com/api/v3/global")
-
-    if not data:
-        return "Market alınamadı"
-
-    m = data["data"]
-
-    return f"""
-🌍 MARKET
-
-💰 Cap: {round(m['total_market_cap']['usd']/1e9,2)}B
-🟡 BTC: %{round(m['market_cap_percentage']['btc'],2)}
-"""
 
 
 # WEBHOOK
@@ -272,43 +252,33 @@ def webhook():
     msg = data["message"]
 
     chat = msg["chat"]["id"]
-    text = msg.get("text","").lower()
+    text = msg.get("text","").lower().strip()
 
     subscribers.add(chat)
 
     if text == "/start":
-        send(chat,
-"""🤖 CRYPTO AI BOT
-
-/coin btc
-/scan
-/market
-""")
+        send(chat,"Bot aktif 🚀")
 
     elif text == "/scan":
+
         results = scan()
 
         if not results:
             send(chat,"Fırsat yok ❌")
 
-        for r in results[:5]:
-            send(chat, f"{r['symbol']} → {r['score']}")
+        for _, r, _ in results:
+            send(chat, r)
 
     elif text.startswith("/coin"):
-        try:
-            coin = text.split(" ")[1]
-            r = analyze(coin)
-            send(chat, str(r))
-        except:
-            send(chat,"/coin btc")
 
-    elif text == "/market":
-        send(chat, market())
+        try:
+            coin = text.split()[1]
+            send(chat, analyze(coin))
+        except:
+            send(chat,"/coin btc yaz")
 
     else:
-        r = analyze(text)
-        if r:
-            send(chat, str(r))
+        send(chat, analyze(text))
 
     return "ok"
 
@@ -319,6 +289,7 @@ def home():
 
 
 threading.Thread(target=auto, daemon=True).start()
+threading.Thread(target=keep_alive, daemon=True).start()
 
 
 if __name__ == "__main__":
