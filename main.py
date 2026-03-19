@@ -7,7 +7,7 @@ from flask import Flask, request
 TOKEN = "8330248406:AAGkRbWFts1Ly_Ho0BoI4Zxilc-q5qh_KPw"
 TELEGRAM = f"https://api.telegram.org/bot{TOKEN}"
 
-APP_URL = "https://crypto-bot-1-hs1x.onrender.com"  # önemli!
+APP_URL = "https://crypto-bot-1-hs1x.onrender.com"
 
 app = Flask(__name__)
 
@@ -53,7 +53,7 @@ def send(chat, text):
         pass
 
 
-# KEEP ALIVE (SLEEP FIX)
+# KEEP ALIVE
 def keep_alive():
     while True:
         try:
@@ -82,22 +82,9 @@ def load_binance():
 load_binance()
 
 
-# PRICE DATA
+# PRICE DATA (FIXED)
 def get_prices(symbol):
-    try:        url = "https://api.coingecko.com/api/v3/simple/price"
-        params = {
-            "ids": symbol.lower(),
-            "vs_currencies": "usd"
-        }
-
-        r = safe(url, params)
-
-        if r and symbol.lower() in r:
-            return r[symbol.lower()]["usd"]
-    except:
-        pass
-
-    return None
+    try:
         symbol = symbol.upper() + "USDT"
 
         data = safe(
@@ -116,6 +103,7 @@ def get_prices(symbol):
         volumes = [float(x[5]) for x in data]
 
         return prices, volumes
+
     except:
         return None
 
@@ -145,31 +133,13 @@ def macd(p):
     return (sum(p[-12:])/12) - (sum(p[-26:])/26)
 
 
-# ANALYZE
-if not data:
-    price = get_price_fallback(symbol)
-
-    if price:
-        return f"""
-🪙 {symbol.upper()}
-
-💰 ${price}
-📊 Basit veri (fallback)
-"""
-
-    return "⚠️ Coin bulunamadı"
+# ANALYZE (FIXED)
 def analyze(symbol):
 
     data = get_prices(symbol)
 
     if not data:
-    return f"""
-⚠️ {symbol.upper()} bulunamadı
-
-💡 Muhtemel sebep:
-- Binance desteklemiyor
-- API geçici sorun
-"""
+        return f"⚠️ {symbol.upper()} bulunamadı"
 
     prices, volumes = data
 
@@ -302,11 +272,12 @@ def webhook():
 
     elif text.startswith("/coin"):
 
-        try:
-            coin = text.split()[1]
-            send(chat, analyze(coin))
-        except:
+        parts = text.split()
+
+        if len(parts) < 2:
             send(chat,"/coin btc yaz")
+        else:
+            send(chat, analyze(parts[1]))
 
     else:
         send(chat, analyze(text))
