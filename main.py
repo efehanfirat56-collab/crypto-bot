@@ -84,7 +84,20 @@ load_binance()
 
 # PRICE DATA
 def get_prices(symbol):
-    try:
+    try:        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": symbol.lower(),
+            "vs_currencies": "usd"
+        }
+
+        r = safe(url, params)
+
+        if r and symbol.lower() in r:
+            return r[symbol.lower()]["usd"]
+    except:
+        pass
+
+    return None
         symbol = symbol.upper() + "USDT"
 
         data = safe(
@@ -133,6 +146,18 @@ def macd(p):
 
 
 # ANALYZE
+if not data:
+    price = get_price_fallback(symbol)
+
+    if price:
+        return f"""
+🪙 {symbol.upper()}
+
+💰 ${price}
+📊 Basit veri (fallback)
+"""
+
+    return "⚠️ Coin bulunamadı"
 def analyze(symbol):
 
     data = get_prices(symbol)
