@@ -138,7 +138,13 @@ def analyze(symbol):
     data = get_prices(symbol)
 
     if not data:
-        return "⚠️ Coin bulunamadı"
+    return f"""
+⚠️ {symbol.upper()} bulunamadı
+
+💡 Muhtemel sebep:
+- Binance desteklemiyor
+- API geçici sorun
+"""
 
     prices, volumes = data
 
