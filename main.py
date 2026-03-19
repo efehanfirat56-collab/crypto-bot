@@ -24,6 +24,7 @@ MIDAS_COINS = [
 BINANCE_COINS = []
 
 
+# SAFE REQUEST
 def safe(url, params=None):
     global last_call
     try:
@@ -40,6 +41,7 @@ def safe(url, params=None):
     return None
 
 
+# TELEGRAM
 def send(chat, text):
     try:
         requests.post(
@@ -51,6 +53,7 @@ def send(chat, text):
         pass
 
 
+# KEEP ALIVE
 def keep_alive():
     while True:
         try:
@@ -60,8 +63,10 @@ def keep_alive():
         time.sleep(300)
 
 
+# LOAD BINANCE
 def load_binance():
     global BINANCE_COINS
+
     data = safe("https://api.binance.com/api/v3/exchangeInfo")
 
     if data:
@@ -77,6 +82,7 @@ def load_binance():
 load_binance()
 
 
+# PRICE DATA (FIXED)
 def get_prices(symbol):
     try:
         symbol = symbol.upper() + "USDT"
@@ -97,11 +103,12 @@ def get_prices(symbol):
         volumes = [float(x[5]) for x in data]
 
         return prices, volumes
+
     except:
         return None
 
 
-# 🔥 FALLBACK EKLENDİ
+# 🔥 FALLBACK
 def get_price_fallback(symbol):
     try:
         url = "https://api.coingecko.com/api/v3/simple/price"
@@ -120,10 +127,13 @@ def get_price_fallback(symbol):
     return None
 
 
+# RSI
 def rsi(p):
     gains, losses = [], []
+
     for i in range(1,len(p)):
         diff = p[i]-p[i-1]
+
         if diff > 0:
             gains.append(diff)
         else:
@@ -136,15 +146,16 @@ def rsi(p):
     return 100-(100/(1+rs))
 
 
+# MACD
 def macd(p):
     return (sum(p[-12:])/12) - (sum(p[-26:])/26)
 
 
+# ANALYZE (FIXED)
 def analyze(symbol):
 
     data = get_prices(symbol)
 
-    # 🔥 FALLBACK DEVREYE GİRİYOR
     if not data:
         price = get_price_fallback(symbol)
 
@@ -210,11 +221,15 @@ def analyze(symbol):
 """
 
 
+# SCAN
 def scan():
+
     coins = MIDAS_COINS + BINANCE_COINS[:80]
+
     results = []
 
     for c in coins:
+
         r = analyze(c)
 
         if "⭐" in str(r):
@@ -226,9 +241,12 @@ def scan():
     return sorted(results, key=lambda x: x[2], reverse=True)[:5]
 
 
+# AUTO ALERT
 def auto():
+
     while True:
         try:
+
             results = scan()
 
             for coin, msg, score in results:
@@ -250,6 +268,7 @@ def auto():
         time.sleep(120)
 
 
+# WEBHOOK
 @app.route("/webhook", methods=["POST"])
 def webhook():
 
@@ -259,6 +278,7 @@ def webhook():
         return "ok"
 
     msg = data["message"]
+
     chat = msg["chat"]["id"]
     text = msg.get("text","").lower().strip()
 
@@ -268,6 +288,7 @@ def webhook():
         send(chat,"Bot aktif 🚀")
 
     elif text == "/scan":
+
         results = scan()
 
         if not results:
@@ -277,12 +298,12 @@ def webhook():
             send(chat, r)
 
     elif text.startswith("/coin"):
-        parts = text.split()
 
-        if len(parts) < 2:
+        try:
+            coin = text.split()[1]
+            send(chat, analyze(coin))
+        except:
             send(chat,"/coin btc yaz")
-        else:
-            send(chat, analyze(parts[1]))
 
     else:
         send(chat, analyze(text))
